@@ -2,11 +2,15 @@
 //  cargo run --example wordcount -- -n 3 -p 0
 // cargo run --example wordcount -- -n 3 -p 1
 // cargo run --example wordcount -- -n 3 -p 2
-
-use colored::*;
+extern crate colored;
+extern crate rand;
 extern crate timely;
 
+use colored::*;
+
+use rand::Rng;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use timely::dataflow::channels::pact::Exchange;
@@ -14,6 +18,19 @@ use timely::dataflow::operators::{Inspect, Map, Operator, Probe};
 use timely::dataflow::{InputHandle, ProbeHandle};
 
 const THREAD_COLORS: &'static [&'static str] = &["magenta", "green", "red", "blue", "yellow"];
+static mut LastID: u32 = 0;
+
+#[derive(Clone, Debug)]
+struct MoveableStruct {
+    id_data: u32,
+    active: bool,
+    creation_time: u64,
+    worker_generator: usize,
+    number_peers: usize,
+    rnd_data: f64,
+    word_to_process: String,
+    diff: i64,
+}
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -24,7 +41,6 @@ fn main() {
         let mut probe = ProbeHandle::new();
         let index = worker.index();
 
-        // println!("{} {:?}", "worker".color(thread_color).bold(), index.to_string());
         // define a distribution function for strings.
         let exchange = Exchange::new(|x: &(String, i64, usize, u64)| (x.0).len() as u64);
 
@@ -32,19 +48,15 @@ fn main() {
         worker.dataflow::<usize, _, _>(|scope| {
             input
                 .to_stream(scope)
-                .flat_map(
-                    |(text, diff, worker_index, __worker_peers, t): (
-                        String,
-                        i64,
-                        usize,
-                        usize,
-                        u64,
-                    )| {
-                        text.split_whitespace()
-                            .map(move |word| (word.to_owned(), diff, worker_index, t))
-                            .collect::<Vec<_>>()
-                    },
-                )
+                .flat_map(|received_data: MoveableStruct| {
+                    let text = received_data.word_to_process;
+                    let diff = received_data.diff;
+                    let worker_index = received_data.worker_generator;
+                    let t = received_data.creation_time;
+                    text.split_whitespace()
+                        .map(move |word| (word.to_owned(), diff, worker_index, t))
+                        .collect::<Vec<_>>()
+                })
                 .unary_frontier(exchange, "WordCount", |_capability, _info| {
                     let mut queues = HashMap::new();
                     let mut counts = HashMap::new();
@@ -75,7 +87,6 @@ fn main() {
                 })
                 .inspect(move |x| {
                     let thread_color = THREAD_COLORS[index].to_string();
-                    // println!("{} {:?}", "worker".color(thread_color.clone()).bold(), index.to_string());
                     println!(
                         "{} {} {} {:?} {} {:?}",
                         "worker ".color(thread_color.clone()).bold(),
@@ -90,42 +101,62 @@ fn main() {
         });
 
         // introduce data and watch!
-        for round in 0..4 {
+        for round in 0..3 {
             let peers = worker.peers();
             let waiting_sec = Duration::from_secs(2);
             let index = worker.index();
             let thread_color = THREAD_COLORS[index].to_string();
             println!(
                 "{} {:?} \t {} {} \t {} {:?}",
-                "\n=========\nCurrent Input Time is "
+                "\n:::\t\tCurrent Input Time is "
                     .color(thread_color.clone())
                     .bold(),
                 input.time(),
                 "In worker ".color(thread_color.clone()).bold(),
                 index,
-                "The real time is ".color(thread_color.clone()).bold(),
+                "Real time is ".color(thread_color.clone()).bold(),
                 t_now()
             );
+            let mut rng = rand::thread_rng();
+            let rand_number: f64 = rng.gen_range(0.0, 10.0) * 10000.0;
+            let hello = String::from("The words That architect is here or there");
+            unsafe {
+                let d: MoveableStruct = MoveableStruct {
+                    id_data: LastID,
+                    active: true,
+                    creation_time: t_now(),
+                    worker_generator: index,
+                    number_peers: peers,
+                    rnd_data: rand_number.round(),
+                    word_to_process: hello.to_owned(),
+                    diff: 1,
+                };
+                LastID = LastID + 1;
 
-            input.send((
-                "the words the architect is here".to_owned(),
-                1,
-                index,
-                peers,
-                t_now(),
-            ));
+                println!(
+                    "{} {:?} {} {:?}",
+                    "Worker ".color(thread_color.clone()).bold(),
+                    index,
+                    " generates ".color(thread_color.clone()).bold(),
+                    d.clone()
+                );
+                input.send(d);
+            }
             sleep(waiting_sec);
-            input.advance_to(round + 1);
+            let b: usize = usize::try_from(round + 1).expect("Usize");
+            input.advance_to(b);
             sleep(waiting_sec);
             while probe.less_than(input.time()) {
-                println!(
-                    "{} {:?} \t {} \t @ {} {}",
-                    "In worker ".color(thread_color.clone()).bold(),
-                    index,
-                    " Performing one more work step".color(thread_color.clone()).bold(), 
-                    "The real time is ".color(thread_color.clone()).bold(),
-                    t_now()
-                );
+                // println!(
+                //     "{} {:?} \t {} \t @ {} {}",
+                //     "In worker ".color(thread_color.clone()).bold(),
+                //     index,
+                //     " performs one more work step"
+                //         .color(thread_color.clone())
+                //         .bold(),
+                //     "Real time is ".color(thread_color.clone()).bold(),
+                //     t_now()
+                // );
                 worker.step();
             }
             sleep(waiting_sec);
