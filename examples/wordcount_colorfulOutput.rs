@@ -1,5 +1,5 @@
 // To run with 3 processors
-// cargo run --example wordcount -- -n 3 -p 0
+//  cargo run --example wordcount -- -n 3 -p 0
 // cargo run --example wordcount -- -n 3 -p 1
 // cargo run --example wordcount -- -n 3 -p 2
 
@@ -108,7 +108,7 @@ fn main() {
             );
 
             input.send((
-                "the word the arche is here".to_owned(),
+                "the words the architect is here".to_owned(),
                 1,
                 index,
                 peers,
@@ -118,6 +118,14 @@ fn main() {
             input.advance_to(round + 1);
             sleep(waiting_sec);
             while probe.less_than(input.time()) {
+                println!(
+                    "{} {:?} \t {} \t @ {} {}",
+                    "In worker ".color(thread_color.clone()).bold(),
+                    index,
+                    " Performing one more work step".color(thread_color.clone()).bold(), 
+                    "The real time is ".color(thread_color.clone()).bold(),
+                    t_now()
+                );
                 worker.step();
             }
             sleep(waiting_sec);
