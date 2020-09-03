@@ -81,3 +81,12 @@ fn t_now() -> u64 {
     return now.unwrap().as_secs();
 }
 //
+// let mut input = computation.scoped(move |scope| {
+//     let (input, stream) = scope.new_input();
+//     let (helper, cycle) = scope.loop_variable(iterations, 1);
+//     stream.concat(&cycle)
+//           .exchange(|&x| x)
+//           .map(|x| x + 1)
+//           .connect_loop(helper);
+//     input
+// });
