@@ -2,10 +2,8 @@ extern crate timely;
 
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Exchange, Input, Inspect, Probe};
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
-use timely::dataflow::Scope;
 
 fn main() {
     // construct and execute a timely dataflow
@@ -17,15 +15,23 @@ fn main() {
         let closure1 = move |x: &u64| {
             println!("worker {}:\thello {:?}", index, x);
         };
-        let closure2 = move |t:&u64, xs: &[u64]| {
-            println!("In worker {} t is: {:?}, xs data is: {:?} @ real time is {:?}", index, t, xs, t_now());
+        let closure2 = move |t: &u64, xs: &[u64]| {
+            println!(
+                "In worker {} t is: {:?}, xs data is: {:?} @ real time is {:?}",
+                index,
+                t,
+                xs,
+                t_now()
+            );
         };
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
-            scope.input_from(&mut input)
-                 .exchange(|x| *x)
-                 .inspect(closure1)
-                 .inspect_batch(closure2).probe_with(&mut probe);
+            scope
+                .input_from(&mut input)
+                .exchange(|x| *x)
+                .inspect(closure1)
+                .inspect_batch(closure2)
+                .probe_with(&mut probe);
         });
         let three_sec = Duration::from_secs(1);
         let index = worker.index();
@@ -44,10 +50,11 @@ fn main() {
             worker.step();
             sleep(three_sec);
         }
-    });
+    }).unwrap();
 }
 
 fn t_now() -> u64 {
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     return now.unwrap().as_secs();
 }
+// 
