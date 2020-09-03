@@ -14,15 +14,18 @@ fn main() {
         let index = worker.index();
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
-
+        let closure1 = move |x: &u64| {
+            println!("worker {}:\thello {:?}", index, x);
+        };
+        let closure2 = move |t:&u64, xs: &[u64]| {
+            println!("In worker {} t is: {:?}, xs data is: {:?} @ real time is {:?}", index, t, xs, t_now());
+        };
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope.input_from(&mut input)
                  .exchange(|x| *x)
-                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                 .inspect_batch(move |t, xs| {
-                    println!("In worker {} t is: {:?}, xs data is: {:?} @ real time is {:?}", index, t, xs, t_now());
-                }).probe_with(&mut probe);
+                 .inspect(closure1)
+                 .inspect_batch(closure2).probe_with(&mut probe);
         });
         let three_sec = Duration::from_secs(1);
         let index = worker.index();
