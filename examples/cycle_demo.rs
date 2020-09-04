@@ -22,7 +22,7 @@ fn main() {
             let thread_color = THREAD_COLORS[index].to_string();
             println!(
                 "{} {:?} {} {:?} {} {:?} {} {:?}",
-                "worker ".color(thread_color.clone()).bold(),
+                "after Exchange: worker ".color(thread_color.clone()).bold(),
                 index,
                 " t is: ".color(thread_color.clone()).bold(),
                 t,
@@ -35,22 +35,35 @@ fn main() {
         };
 
         let map_closure = move |x: u64| {
-            let delay_sec = Duration::from_secs(1);
-            let res = u64::try_from(100 * (index.clone() ));
-            let ret: u64 = res.unwrap() + x;
+            let delay_sec = Duration::from_secs(0);
+            let res = u64::try_from(100 * (index.clone()));
+            let ret: u64 = res.unwrap() + x + 1u64;
             sleep(delay_sec);
             ret
         };
+
+        let closure_before_map = move |x: &u64| {
+            println!("Before applying Map : worker {}:\thello {:?} real time is {:?} ", index, x, t_now());
+        };
+        
+
+        let closure1 = move |x: &u64| {
+            println!("Afer Map: worker {}:\thello {:?} real time is {:?} ", index, x, t_now());
+        };
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
+            // create a loop that cycles unboundedly.
             let (handle, cycle) = scope.feedback(40);
+
             (0..10)
                 .to_stream(scope)
                 .concat(&cycle)
+                .inspect(closure_before_map)
                 .map(map_closure)
+                .inspect(closure1)
                 .exchange(|&x| x)
                 .inspect_batch(closure2)
-                .branch_when(|t| t < &600)
+                .branch_when(|t| t < &200)
                 .1
                 .connect_loop(handle);
         });
@@ -62,3 +75,4 @@ fn t_now() -> u64 {
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
     return now.unwrap().as_secs();
 }
+
