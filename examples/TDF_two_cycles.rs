@@ -7,7 +7,7 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 
 use timely::dataflow::operators::{
-    Concat, ConnectLoop, Feedback, Filter,Exchange, Inspect, Map, Partition, ToStream,
+    Concat, ConnectLoop, Exchange, Feedback, Filter, Inspect, Map, Partition, ToStream,
 }; //BranchWhen, Feedback, Exchange,
 
 const THREAD_COLORS: &'static [&'static str] = &["magenta", "green", "red", "blue", "yellow"];
@@ -36,15 +36,15 @@ fn main() {
 
         let map_closure = move |x: u64| {
             let delay_sec = Duration::from_secs(1);
-            let res = u64::try_from(30 * (index.clone()+ 1));
+            let res = u64::try_from(30 * (index.clone() + 1));
             let ret: u64 = res.unwrap() + x + 1u64;
             sleep(delay_sec);
             ret
         };
 
-        let closure_before_map = move |x: &u64| {
+        let closure_before_exchange = move |x: &u64| {
             println!(
-                "Before applying Map : worker {}:\thello {:?} real time is {:?} ",
+                "Before applying exchange : worker {}:\thello {:?} real time is {:?} ",
                 index,
                 x,
                 t_now()
@@ -53,7 +53,7 @@ fn main() {
 
         let closure1 = move |x: &u64| {
             println!(
-                "Afer Map: worker {}:\thello {:?} real time is {:?} ",
+                "Afer exchange: worker {}:\thello {:?} real time is {:?} ",
                 index,
                 x,
                 t_now()
@@ -72,9 +72,11 @@ fn main() {
                 .to_stream(scope)
                 .concat(&results0)
                 .concat(&results1)
+                .inspect(closure_before_exchange)
                 .exchange(|&x| x)
                 .inspect(closure1)
-                .inspect_batch(closure2).partition(2, |x| (x % 2, x));
+                .inspect_batch(closure2)
+                .partition(2, |x| (x % 2, x));
 
             parts[0].connect_loop(handle0);
             parts[1].connect_loop(handle1);
